@@ -17,7 +17,7 @@
 #    along with periscope; if not, write to the Free Software
 #    Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
-import zipfile, os, urllib2, urllib, logging, traceback, httplib
+import zipfile, os, urllib2, urllib, logging, traceback, httplib, requests, sys
 from BeautifulSoup import BeautifulSoup
 
 import SubtitleDatabase
@@ -63,8 +63,7 @@ class SubScene(SubtitleDatabase.SubtitleDB):
 
 	def __init__(self, config, cache_folder_path):
 		super(SubScene, self).__init__(SS_LANGUAGES)
-		#http://subscene.com/s.aspx?subtitle=Dexter.S04E01.HDTV.XviD-NoTV
-		self.host = "http://subscene.com/s.aspx?subtitle="
+		self.host = "http://v2.subscene.com/s.aspx?subtitle="
 
 	def process(self, filepath, langs):
 		''' main method to call on the plugin, pass the filename and the wished 
@@ -92,11 +91,12 @@ class SubScene(SubtitleDatabase.SubtitleDB):
 		soup = BeautifulSoup(page)
 		
 		dlhref = soup.find("div", {"class" : "download"}).find("a")["href"]
-		subtitle["link"] =  "http://subscene.com" + dlhref.split('"')[7]
+		subtitle["link"] =  "http://subscene.com" + dlhref
 		format = "zip"
-		archivefilename = subtitle["filename"].rsplit(".", 1)[0] + '.'+ format
-		self.downloadFile(subtitle["link"], archivefilename)
+
+		archivefilename = self.downloadFile(subtitle["link"], None)
 		subtitlefilename = None
+                srtbasefilename = subtitle['release']
 		
 		if zipfile.is_zipfile(archivefilename):
 			logging.debug("Unzipping file " + archivefilename)
@@ -134,7 +134,7 @@ class SubScene(SubtitleDatabase.SubtitleDB):
 							# exit
 						return subtitlefilename
 			except OSError, e:
-			    logging.error("Execution failed: %s" %e)
+                            logging.error("Execution failed: %s" %e)
 			    return None
 			
 		else:
@@ -143,20 +143,25 @@ class SubScene(SubtitleDatabase.SubtitleDB):
 
 	def downloadFile(self, url, filename):
 		''' Downloads the given url to the given filename '''
-		logging.info("Downloading file %s" %url)
-		req = urllib2.Request(url, headers={'Referer' : url, 'User-Agent' : 'Mozilla/5.0 (X11; U; Linux x86_64; en-US; rv:1.9.1.3)'})
-		
-		f = urllib2.urlopen(req, data=urllib.urlencode({'__EVENTTARGET' : 's$lc$bcr$downloadLink', '__EVENTARGUMENT' : '', '__VIEWSTATE' : '/wEPDwUHNzUxOTkwNWRk4wau5efPqhlBJJlOkKKHN8FIS04='}))
+                filename = 'subtitle.zip'
 		dump = open(filename, "wb")
-		try:
-			f.read(1000000)
-		except httplib.IncompleteRead, e:
-			dump.write(e.partial)
-			logging.warn('Incomplete read for %s ... Trying anyway to decompress.' %url)
-		dump.close()
-		f.close()
 		
-		#SubtitleDatabase.SubtitleDB.downloadFile(self, req, filename)
+                response = requests.get(url, stream = True)
+                with open('subtitle.zip', 'wb') as out_file:
+                    fsrc = response.raw
+                    size = response.headers.get("content-length")
+                    length = 16*1024
+                    while True:
+                        buf = fsrc.read(length)
+                        if not buf:
+                            break
+                        out_file.write(buf)
+                        sys.stdout.write("Downloaded " +
+                                 str(os.path.getsize(filename)/1024) + "kb of " + str(int(size)/1024) + " kb\r")
+                        sys.stdout.flush()
+                    print "\nDownload complete\nExtracting"
+                del response
+                return filename
 	
 	def query(self, token, langs=None):
 		''' makes a query on subscene and returns info (link, lang) about found subtitles'''
@@ -173,7 +178,6 @@ class SubScene(SubtitleDatabase.SubtitleDB):
 			release_span = lang_span.findNext("span")
 			release = release_span.contents[0].strip().split(" (")[0]
 			sub_page = subs["href"]
-			#http://subscene.com//s-dlpath-260016/78348/rar.zipx
 			if release.startswith(token) and (not langs or lang in langs):
 				result = {}
 				result["release"] = release
