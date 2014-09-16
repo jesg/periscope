@@ -27,8 +27,7 @@ from SubDivX import SubDivX
 
 #from SubtitleSource import SubtitleSource # require a key in the config file
 
-# Not working anymore (download fails)
-#from SubScene import SubScene
+from SubScene import SubScene
 
 # Don't want to be included
 #from Addic7ed import Addic7ed

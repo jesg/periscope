@@ -12,5 +12,8 @@ setup(name = PACKAGE, version = version.VERSION,
       packages= [ "periscope", "periscope/plugins" ],
       py_modules=["periscope"],
       scripts = [ "bin/periscope" ],
-      install_requires = ["BeautifulSoup >= 3.2.0"]
+      install_requires = [
+          "BeautifulSoup >= 3.2.0",
+          "requests >= 0.2.2",
+          ]
       )
